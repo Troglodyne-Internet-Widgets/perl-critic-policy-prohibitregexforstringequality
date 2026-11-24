@@ -131,10 +131,12 @@ sub violates {
 
     my $re = $doc->ppix_regexp_from_element($elem) or return;
     return if $re->failures();
-    return if any { $re->modifier_asserted($_) } @EXEMPTING_MODIFIERS;
+    foreach my $modifier (@EXEMPTING_MODIFIERS) {
+        return if $re->modifier_asserted($modifier);
+    }
 
     my $pattern = $re->regular_expression() or return;
-    my @parts   = grep { $_->significant() } $pattern->children();
+    my @parts   = _significant( $pattern->children() );
 
     my $start = shift @parts;
     my $end   = pop @parts;
@@ -170,7 +172,7 @@ sub _alternatives {
     return 0 if !$type || $type->content() ne $PLAIN_GROUP;
 
     my @runs = ( [] );
-    foreach my $token ( grep { $_->significant() } $group->children() ) {
+    foreach my $token ( _significant( $group->children() ) ) {
         if ( $token->isa('PPIx::Regexp::Token::Operator') && $token->content() eq $ALTERNATION ) {
             push @runs, [];
             next;
@@ -200,7 +202,19 @@ sub _is_split_pattern {
         $before = $list->sprevious_sibling();
     }
     return 0 if !$before || !$before->isa('PPI::Token::Word');
-    return any { $before->content() eq $_ } qw{split CORE::split};
+    my $word = $before->content();
+    return any { $word eq $_ } qw{split CORE::split};
+}
+
+# The tokens of @children that matter to the match, not whitespace or comments.
+sub _significant {
+    my (@children) = @_;
+
+    my @kept;
+    foreach my $child (@children) {
+        push @kept, $child if $child->significant();
+    }
+    return @kept;
 }
 
 1;
